@@ -30,7 +30,7 @@ type Token struct {
 //http://fyxt.t.chindeo.com/platform/report/device
 func GetToken(appid, appsecret, host string, timeover, timeout int64) error {
 	var re getToken
-	fullUrl := host + "platform/application/login"
+	fullUrl := host + "/platform/application/login"
 	data := fmt.Sprintf("appid=%s&appsecret=%s&apptype=%s", appid, appsecret, "hospital")
 	result := Request(appid, "POST", fullUrl, data, timeover, timeout, false)
 	if len(result) == 0 {
@@ -54,7 +54,7 @@ func GetToken(appid, appsecret, host string, timeover, timeout int64) error {
 //http://fyxt.t.chindeo.com/platform/report/device
 func RfreshToken(appid, host string, timeover, timeout int64) error {
 	var re getToken
-	fullUrl := host + "platform/application/update_token"
+	fullUrl := host + "/platform/application/update_token"
 	result := Request(appid, "GET", fullUrl, "", timeover, timeout, true)
 	if len(result) == 0 {
 		return errors.New("请求没有返回数据")
