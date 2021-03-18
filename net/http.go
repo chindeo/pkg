@@ -10,7 +10,30 @@ import (
 	"time"
 )
 
-type getToken struct {
+var NetClient *Client
+
+type Client struct {
+	Config *Config
+}
+
+type Config struct {
+	Appid      string
+	AppSecret  string
+	LoginData  string
+	LoginUrl   string
+	RefreshUrl string
+	TimeOver   int64
+	TimeOut    int64
+}
+
+func NewNetClient(config *Config) {
+	if NetClient != nil {
+		return
+	}
+	NetClient = &Client{config}
+}
+
+type responseToken struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Data    *Token `json:"data"`
@@ -26,22 +49,108 @@ type Token struct {
 	XToken string `json:"X-Token"`
 }
 
-//http://fyxt.t.chindeo.com/platform/application/login
-//http://fyxt.t.chindeo.com/platform/report/device
-func GetToken(appid, appsecret, host string, timeover, timeout int64) error {
-	var re getToken
-	fullUrl := host + "/platform/application/login"
-	data := fmt.Sprintf("appid=%s&appsecret=%s&apptype=%s", appid, appsecret, "hospital")
-	result := Request(appid, "POST", fullUrl, data, timeover, timeout, false)
+type ServerResponse struct {
+	FullPath     string
+	Auth         bool
+	ResponseInfo *ResponseInfo
+}
+
+type ResponseInfo struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+//POSTNet  提交数据
+func (n *Client) POSTNet(sr *ServerResponse, data string) ([]byte, error) {
+	result := Request(n.Config.Appid, "POST", sr.FullPath, data, n.Config.TimeOver, n.Config.TimeOut, sr.Auth)
 	if len(result) == 0 {
-		return errors.New("请求没有返回数据")
+		return result, fmt.Errorf("post %s 没有返回数据", sr.FullPath)
+	}
+	err := json.Unmarshal(result, sr.ResponseInfo)
+	if err != nil {
+		return result, fmt.Errorf("dopost: %s json.Unmarshal error：%w ,with result: %v", sr.FullPath, err, string(result))
 	}
 
+	if sr.ResponseInfo.Code == 401 {
+		err = n.GetToken()
+		if err != nil {
+			return result, fmt.Errorf("post %s get token err %w", sr.FullPath, err)
+		}
+		return result, nil
+	} else if sr.ResponseInfo.Code == 402 {
+		err = n.RfreshToken()
+		if err != nil {
+			return result, fmt.Errorf("post %s refresh token err %w", sr.FullPath, err)
+		}
+		return result, nil
+	} else if sr.ResponseInfo.Code != 200 {
+		return result, fmt.Errorf("post %s 返回错误信息 %s 【%d】", sr.FullPath, sr.ResponseInfo.Message, sr.ResponseInfo.Code)
+	}
+	return result, nil
+}
+
+//GetNet  获取数据
+func (n *Client) GetNet(sr *ServerResponse) ([]byte, error) {
+	result := Request(n.Config.Appid, "GET", sr.FullPath, "", n.Config.TimeOver, n.Config.TimeOut, sr.Auth)
+	if len(result) == 0 {
+		return result, fmt.Errorf("get %s 没有返回数据", sr.FullPath)
+	}
+	err := json.Unmarshal(result, sr.ResponseInfo)
+	if err != nil {
+		return result, fmt.Errorf("get %s 获取服务解析返回内容报错 %w", sr.FullPath, err)
+	}
+
+	if sr.ResponseInfo.Code == 401 {
+		err := n.GetToken()
+		if err != nil {
+			return result, fmt.Errorf("%s get token err %w", sr.FullPath, err)
+		}
+		return result, nil
+	} else if sr.ResponseInfo.Code == 402 {
+		err := n.RfreshToken()
+		if err != nil {
+			return result, fmt.Errorf("get %s refresh token err %w", sr.FullPath, err)
+		}
+		return result, fmt.Errorf("刷新 token")
+	} else if sr.ResponseInfo.Code != 200 {
+		return result, fmt.Errorf("get %s 返回错误信息 %s 【%d】", sr.FullPath, sr.ResponseInfo.Message, sr.ResponseInfo.Code)
+	}
+	return result, nil
+}
+
+// GetToken
+// data := fmt.Sprintf("appid=%s&appsecret=%s&apptype=%s", appid, appsecret, "hospital")
+func (n *Client) GetToken() error {
+	re := &responseToken{}
+	result := Request(n.Config.Appid, "POST", n.Config.LoginUrl, n.Config.LoginData, n.Config.TimeOver, n.Config.TimeOut, false)
+	if len(result) == 0 {
+		return fmt.Errorf("GetToken  %s get empty data", n.Config.LoginUrl)
+	}
+
+	err := json.Unmarshal(result, re)
+	if err != nil {
+		return fmt.Errorf("unmarshal json %s error %w", string(result), err)
+	}
+
+	if re.Code == 200 {
+		SetCacheToken(re.Data.XToken)
+		return nil
+	} else {
+		return fmt.Errorf(re.Message)
+	}
+}
+
+// RfreshToken
+func (n *Client) RfreshToken() error {
+	re := &responseToken{}
+	result := Request(n.Config.Appid, "GET", n.Config.RefreshUrl, "", n.Config.TimeOver, n.Config.TimeOut, true)
+	if len(result) == 0 {
+		return fmt.Errorf("RfreshToken  %s get empty data", n.Config.RefreshUrl)
+	}
 	err := json.Unmarshal(result, &re)
 	if err != nil {
-		return err
+		return fmt.Errorf("unmarshal json %s error %w", string(result), err)
 	}
-
 	if re.Code == 200 {
 		SetCacheToken(re.Data.XToken)
 		return nil
@@ -50,41 +159,19 @@ func GetToken(appid, appsecret, host string, timeover, timeout int64) error {
 	}
 }
 
-//http://fyxt.t.chindeo.com/platform/application/update_token
-//http://fyxt.t.chindeo.com/platform/report/device
-func RfreshToken(appid, host string, timeover, timeout int64) error {
-	var re getToken
-	fullUrl := host + "/platform/application/update_token"
-	result := Request(appid, "GET", fullUrl, "", timeover, timeout, true)
-	if len(result) == 0 {
-		return errors.New("请求没有返回数据")
-	}
-	err := json.Unmarshal(result, &re)
-	if err != nil {
-		return err
-	}
-	if re.Code == 200 {
-		SetCacheToken(re.Data.XToken)
-		return nil
-	} else {
-		return errors.New(re.Message)
-	}
-}
-
-func Request(appid, method, fullUrl, data string, timeover, timeout int64, auth bool) []byte {
-	var result = make(chan []byte, 10)
-	T := time.Tick(time.Duration(timeover) * time.Second)
+func Request(appid, method, url, data string, timeover, timeout int64, auth bool) []byte {
+	result := make(chan []byte, 30)
+	T := time.NewTicker(time.Duration(timeover) * time.Second)
 	go func() {
 		t := time.Duration(timeout) * time.Second
 		Client := http.Client{Timeout: t}
-		req, err := http.NewRequest(method, fullUrl, strings.NewReader(data))
+		req, err := http.NewRequest(method, url, strings.NewReader(data))
 		if err != nil {
-			fmt.Println(fmt.Sprintf("%s: %+v", fullUrl, err))
 			result <- nil
 			return
 		}
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
-		if auth {
+		if auth && appid != "" {
 			req.Header.Set("X-Token", GetCacheToken())
 			phpSessionId := GetSessionId(appid)
 			if phpSessionId != nil {
@@ -94,13 +181,12 @@ func Request(appid, method, fullUrl, data string, timeover, timeout int64, auth 
 		var resp *http.Response
 		resp, err = Client.Do(req)
 		if err != nil {
-			fmt.Println(fmt.Sprintf("%s: %+v", fullUrl, err))
 			result <- nil
 			return
 		}
 		defer resp.Body.Close()
 
-		if !auth {
+		if !auth && appid != "" {
 			SetSessionId(resp.Cookies(), appid)
 		}
 
@@ -113,9 +199,8 @@ func Request(appid, method, fullUrl, data string, timeover, timeout int64, auth 
 		select {
 		case x := <-result:
 			return x
-		case <-T:
-			return nil
+		case <-T.C:
+			return []byte("请求超时")
 		}
 	}
-
 }
