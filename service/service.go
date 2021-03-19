@@ -6,8 +6,8 @@ package service
 
 import (
 	"fmt"
-	"strings"
-	"time"
+	"os"
+	"os/signal"
 
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/debug"
@@ -16,70 +16,109 @@ import (
 
 var elog debug.Log
 
-type myservice struct{}
+var interactive = false
 
-func (m *myservice) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (ssec bool, errno uint32) {
-	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown | svc.AcceptPauseAndContinue
+func init() {
+	var err error
+	interactive, err = svc.IsWindowsService()
+	if err != nil {
+		panic(err)
+	}
+}
+
+type Interface interface {
+	Start() error
+	Stop() error
+}
+
+type WindowsService struct {
+	Name string
+	i    Interface
+}
+
+func NewService(i Interface, name string) (*WindowsService, error) {
+	ws := &WindowsService{
+		i:    i,
+		Name: name,
+	}
+	return ws, nil
+}
+
+func (ws *WindowsService) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
+	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
 	changes <- svc.Status{State: svc.StartPending}
-	fasttick := time.Tick(500 * time.Millisecond)
-	slowtick := time.Tick(2 * time.Second)
-	tick := fasttick
+
+	if err := ws.i.Start(); err != nil {
+		elog.Info(1, fmt.Sprintf("%s service start failed: %v", ws.Name, err))
+		return true, 1
+	}
+
 	changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
 loop:
 	for {
-		select {
-		case <-tick:
-			beep()
-			elog.Info(1, "beep")
-		case c := <-r:
-			switch c.Cmd {
-			case svc.Interrogate:
-				changes <- c.CurrentStatus
-				// Testing deadlock from https://code.google.com/p/winsvc/issues/detail?id=4
-				time.Sleep(100 * time.Millisecond)
-				changes <- c.CurrentStatus
-			case svc.Stop, svc.Shutdown:
-				// golang.org/x/sys/windows/svc.TestExample is verifying this output.
-				testOutput := strings.Join(args, "-")
-				testOutput += fmt.Sprintf("-%d", c.Context)
-				elog.Info(1, testOutput)
-				break loop
-			case svc.Pause:
-				changes <- svc.Status{State: svc.Paused, Accepts: cmdsAccepted}
-				tick = slowtick
-			case svc.Continue:
-				changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
-				tick = fasttick
-			default:
-				elog.Error(1, fmt.Sprintf("unexpected control request #%d", c))
+		c := <-r
+		switch c.Cmd {
+		case svc.Interrogate:
+			changes <- c.CurrentStatus
+		case svc.Stop:
+			changes <- svc.Status{State: svc.StopPending}
+			if err := ws.i.Stop(); err != nil {
+				elog.Info(1, fmt.Sprintf("%s service stop failed: %v", ws.Name, err))
+				return true, 2
 			}
+			break loop
+		case svc.Shutdown:
+			changes <- svc.Status{State: svc.StopPending}
+			err := ws.i.Stop()
+			if err != nil {
+				elog.Info(1, fmt.Sprintf("%s service shutdown failed: %v", ws.Name, err))
+				return true, 2
+			}
+			break loop
+		default:
+			continue loop
 		}
 	}
-	changes <- svc.Status{State: svc.StopPending}
-	return
+
+	return false, 0
 }
 
-func RunService(name string, isDebug bool) {
+func (ws *WindowsService) Run(isDebug bool) error {
 	var err error
-	if isDebug {
-		elog = debug.New(name)
-	} else {
-		elog, err = eventlog.Open(name)
-		if err != nil {
-			return
+	if !interactive {
+		if isDebug {
+			elog = debug.New(ws.Name)
+		} else {
+			elog, err = eventlog.Open(ws.Name)
+			if err != nil {
+				return err
+			}
 		}
-	}
-	defer elog.Close()
+		defer elog.Close()
 
-	elog.Info(1, fmt.Sprintf("starting %s service", name))
-	run := svc.Run
-	if isDebug {
-		run = debug.Run
+		elog.Info(1, fmt.Sprintf("starting %s service", ws.Name))
+		run := svc.Run
+		if isDebug {
+			run = debug.Run
+		}
+		err = run(ws.Name, ws)
+		if err != nil {
+			elog.Error(1, fmt.Sprintf("%s service failed: %v", ws.Name, err))
+			return err
+		}
+		elog.Info(1, fmt.Sprintf("%s service stopped", ws.Name))
 	}
-	err = run(name, &myservice{})
+
+	err = ws.i.Start()
 	if err != nil {
-		elog.Error(1, fmt.Sprintf("%s service failed: %v", name, err))
-		return
+		return err
 	}
-	elog.Info(1, fmt.Sprintf("%s service stopped", name))
+
+	sigChan := make(chan os.Signal)
+
+	signal.Notify(sigChan, os.Interrupt)
+
+	<-sigChan
+
+	return ws.i.Stop()
 }
