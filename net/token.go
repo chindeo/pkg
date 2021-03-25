@@ -37,7 +37,7 @@ func GetCache() *cache.Cache {
 	if ca != nil {
 		return ca
 	}
-	ca = cache.New(1*time.Hour, 2*time.Hour)
+	ca = cache.New(24*time.Hour, 7*24*time.Hour)
 	return ca
 }
 
