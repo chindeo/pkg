@@ -7,8 +7,8 @@ import (
 
 var (
 	Host       string = "http://op.t.chindeo.com"
-	Appid      string = "dsfdsfdsf"
-	Appsecret  string = "sdfsdfsdfdsfsdfsdf"
+	Appid      string = "XvtbOYC0VQEweLqW01cyHvn8TTDq9Yun"
+	Appsecret  string = "iemkUnyvJLghZgkKJBDaB4r4hNlFkab673BO9w6AuU367Rqv5N"
 	Loginuri   string = "/platform/application/login"
 	Refreshuri string = "/platform/application/update_token"
 	Timeover   int64  = 5

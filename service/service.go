@@ -18,9 +18,10 @@ var elog debug.Log
 
 var interactive = false
 
+// IsAnInteractiveSession 不能修改成 IsWindowsService 否则无法正常启动应用
 func init() {
 	var err error
-	interactive, err = svc.IsWindowsService()
+	interactive, err = svc.IsAnInteractiveSession()
 	if err != nil {
 		panic(err)
 	}

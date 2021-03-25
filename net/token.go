@@ -3,6 +3,7 @@ package net
 import (
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -11,6 +12,7 @@ import (
 var ca *cache.Cache
 var token string
 var phpsess *http.Cookie
+var rw sync.RWMutex
 
 func SetSessionId(cookies []*http.Cookie, appid string) {
 	for _, cookie := range cookies {
@@ -39,12 +41,16 @@ func GetCache() *cache.Cache {
 	return ca
 }
 
-func SetCacheToken(token string) {
-	GetCache().Set("XToken", token, cache.DefaultExpiration)
+func SetCacheToken(token, appid string) {
+	rw.Lock()
+	defer rw.Unlock()
+	GetCache().Set("XToken:"+appid, token, cache.DefaultExpiration)
 }
 
-func GetCacheToken() string {
-	foo, found := GetCache().Get("XToken")
+func GetCacheToken(appid string) string {
+	rw.RLock()
+	defer rw.RUnlock()
+	foo, found := GetCache().Get("XToken:" + appid)
 	if found {
 		token = foo.(string)
 	}

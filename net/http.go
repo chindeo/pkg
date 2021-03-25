@@ -72,17 +72,17 @@ func (n *Client) POSTNet(sr *ServerResponse, data string) ([]byte, error) {
 	}
 
 	if sr.ResponseInfo.Code == 401 {
-		err = n.GetToken()
+		token, err := n.GetToken()
 		if err != nil {
 			return result, fmt.Errorf("post %s get token err %w", sr.FullPath, err)
 		}
-		return result, nil
+		return result, fmt.Errorf("post %s get token %s", sr.FullPath, token)
 	} else if sr.ResponseInfo.Code == 402 {
-		err = n.RfreshToken()
+		token, err := n.RfreshToken()
 		if err != nil {
 			return result, fmt.Errorf("post %s refresh token err %w", sr.FullPath, err)
 		}
-		return result, nil
+		return result, fmt.Errorf("post %s refresh token %s", sr.FullPath, token)
 	} else if sr.ResponseInfo.Code != 200 {
 		return result, fmt.Errorf("post %s 返回错误信息 %s 【%d】", sr.FullPath, sr.ResponseInfo.Message, sr.ResponseInfo.Code)
 	}
@@ -101,17 +101,17 @@ func (n *Client) GetNet(sr *ServerResponse) ([]byte, error) {
 	}
 
 	if sr.ResponseInfo.Code == 401 {
-		err := n.GetToken()
+		token, err := n.GetToken()
 		if err != nil {
 			return result, fmt.Errorf("%s get token err %w", sr.FullPath, err)
 		}
-		return result, nil
+		return result, fmt.Errorf("get %s 返回错误信息 get token %s", sr.FullPath, token)
 	} else if sr.ResponseInfo.Code == 402 {
-		err := n.RfreshToken()
+		token, err := n.RfreshToken()
 		if err != nil {
 			return result, fmt.Errorf("get %s refresh token err %w", sr.FullPath, err)
 		}
-		return result, fmt.Errorf("刷新 token")
+		return result, fmt.Errorf("get %s 返回错误信息 refresh token %s ", sr.FullPath, token)
 	} else if sr.ResponseInfo.Code != 200 {
 		return result, fmt.Errorf("get %s 返回错误信息 %s 【%d】", sr.FullPath, sr.ResponseInfo.Message, sr.ResponseInfo.Code)
 	}
@@ -120,42 +120,42 @@ func (n *Client) GetNet(sr *ServerResponse) ([]byte, error) {
 
 // GetToken
 // data := fmt.Sprintf("appid=%s&appsecret=%s&apptype=%s", appid, appsecret, "hospital")
-func (n *Client) GetToken() error {
+func (n *Client) GetToken() (string, error) {
 	re := &responseToken{}
 	result := Request(n.Config.Appid, "POST", n.Config.LoginUrl, n.Config.LoginData, n.Config.TimeOver, n.Config.TimeOut, false)
 	if len(result) == 0 {
-		return fmt.Errorf("GetToken  %s get empty data", n.Config.LoginUrl)
+		return "", fmt.Errorf("GetToken  %s get empty data", n.Config.LoginUrl)
 	}
 
 	err := json.Unmarshal(result, re)
 	if err != nil {
-		return fmt.Errorf("unmarshal json %s error %w", string(result), err)
+		return "", fmt.Errorf("unmarshal json %s error %w", string(result), err)
 	}
 
 	if re.Code == 200 {
-		SetCacheToken(re.Data.XToken)
-		return nil
+		SetCacheToken(re.Data.XToken, n.Config.Appid)
+		return re.Data.XToken, nil
 	} else {
-		return fmt.Errorf(re.Message)
+		return "", fmt.Errorf(re.Message)
 	}
 }
 
 // RfreshToken
-func (n *Client) RfreshToken() error {
+func (n *Client) RfreshToken() (string, error) {
 	re := &responseToken{}
 	result := Request(n.Config.Appid, "GET", n.Config.RefreshUrl, "", n.Config.TimeOver, n.Config.TimeOut, true)
 	if len(result) == 0 {
-		return fmt.Errorf("RfreshToken  %s get empty data", n.Config.RefreshUrl)
+		return "", fmt.Errorf("RfreshToken  %s get empty data", n.Config.RefreshUrl)
 	}
 	err := json.Unmarshal(result, &re)
 	if err != nil {
-		return fmt.Errorf("unmarshal json %s error %w", string(result), err)
+		return "", fmt.Errorf("unmarshal json %s error %w", string(result), err)
 	}
 	if re.Code == 200 {
-		SetCacheToken(re.Data.XToken)
-		return nil
+		SetCacheToken(re.Data.XToken, n.Config.Appid)
+		return re.Data.XToken, nil
 	} else {
-		return errors.New(re.Message)
+		return "", errors.New(re.Message)
 	}
 }
 
@@ -172,7 +172,7 @@ func Request(appid, method, url, data string, timeover, timeout int64, auth bool
 		}
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
 		if auth && appid != "" {
-			req.Header.Set("X-Token", GetCacheToken())
+			req.Header.Set("X-Token", GetCacheToken(appid))
 			phpSessionId := GetSessionId(appid)
 			if phpSessionId != nil {
 				req.AddCookie(phpSessionId)
