@@ -18,14 +18,14 @@ func GetPingMsg(devIp string) (bool, string) {
 	if err != nil {
 		return false, err.Error()
 	}
-	pinger.Count = 5
-	pinger.Interval = time.Duration(300 * time.Millisecond)
+	pinger.Count = 3
+	pinger.Interval = time.Duration(500 * time.Millisecond)
 	pinger.Timeout = time.Duration(1500 * time.Millisecond)
-	pinger.SetPrivileged(true)
+	// pinger.SetPrivileged(true)
 	pinger.Run()
 	stats := pinger.Statistics()
 	if stats.PacketsRecv >= 1 {
 		return true, fmt.Sprintf("设备ip(%s)可以访问", devIp)
 	}
-	return false, fmt.Sprintf("设备ip(%s)无法访问；设备可能已离线", devIp)
+	return false, fmt.Sprintf("设备(%s)可能已离线或者网络不稳定", devIp)
 }
