@@ -24,7 +24,6 @@ func GetPingMsg(devIp string) (bool, string) {
 	pinger.SetPrivileged(true)
 	pinger.Run()
 	stats := pinger.Statistics()
-	println(stats.PacketsRecv)
 	if stats.PacketsRecv >= 1 {
 		return true, fmt.Sprintf("设备ip(%s)可以访问", devIp)
 	}
