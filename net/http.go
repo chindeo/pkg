@@ -120,12 +120,14 @@ func (n *Client) GetNet(sr *ServerResponse) ([]byte, error) {
 	}
 
 	if sr.ResponseInfo.Code == 401 {
+		n.TokenClient.SetCacheToken("")
 		token, err := n.GetToken()
 		if err != nil {
 			return result, fmt.Errorf("%s get token err %w", sr.FullPath, err)
 		}
 		return result, fmt.Errorf("get %s 返回错误信息 get token %s", sr.FullPath, token)
 	} else if sr.ResponseInfo.Code == 402 {
+		n.TokenClient.SetCacheToken("")
 		token, err := n.RfreshToken()
 		if err != nil {
 			return result, fmt.Errorf("get %s refresh token err %w", sr.FullPath, err)
