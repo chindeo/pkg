@@ -8,29 +8,48 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/chindeo/pkg/net/token"
 )
 
 var NetClient *Client
 
 type Client struct {
-	Config *Config
+	Config      *Config
+	TokenClient token.TokenClient
 }
 
 type Config struct {
-	Appid      string
-	AppSecret  string
-	LoginData  string
-	LoginUrl   string
-	RefreshUrl string
-	TimeOver   int64
-	TimeOut    int64
+	Appid       string
+	AppSecret   string
+	LoginData   string
+	LoginUrl    string
+	RefreshUrl  string
+	TimeOver    int64
+	TimeOut     int64
+	TokenDriver string
+	Host        string
+	Pwd         string
 }
 
-func NewNetClient(config *Config) {
+func NewNetClient(config *Config) error {
 	if NetClient != nil {
-		return
+		return nil
 	}
-	NetClient = &Client{config}
+	NetClient = &Client{Config: config}
+	switch config.TokenDriver {
+	case "local":
+		NetClient.TokenClient = &token.LocalClient{AppID: config.Appid}
+	case "redis":
+		if config.Host == "" || config.Pwd == "" {
+			return errors.New("redis driver need set redis host and password")
+		}
+		NetClient.TokenClient = &token.RedisClient{AppID: config.Appid, Host: config.Host, Pwd: config.Pwd}
+	default:
+		NetClient.TokenClient = &token.LocalClient{AppID: config.Appid}
+	}
+	NetClient.TokenClient.GetCache()
+	return nil
 }
 
 type responseToken struct {
@@ -62,7 +81,7 @@ type ResponseInfo struct {
 
 //POSTNet  提交数据
 func (n *Client) POSTNet(sr *ServerResponse, data string) ([]byte, error) {
-	result := Request(n.Config.Appid, "POST", sr.FullPath, data, n.Config.TimeOver, n.Config.TimeOut, sr.Auth)
+	result := n.request("POST", sr.FullPath, data, sr.Auth)
 	if len(result) == 0 {
 		return result, fmt.Errorf("post %s 没有返回数据", sr.FullPath)
 	}
@@ -91,7 +110,7 @@ func (n *Client) POSTNet(sr *ServerResponse, data string) ([]byte, error) {
 
 //GetNet  获取数据
 func (n *Client) GetNet(sr *ServerResponse) ([]byte, error) {
-	result := Request(n.Config.Appid, "GET", sr.FullPath, "", n.Config.TimeOver, n.Config.TimeOut, sr.Auth)
+	result := n.request("GET", sr.FullPath, "", sr.Auth)
 	if len(result) == 0 {
 		return result, fmt.Errorf("get %s 没有返回数据", sr.FullPath)
 	}
@@ -121,8 +140,12 @@ func (n *Client) GetNet(sr *ServerResponse) ([]byte, error) {
 // GetToken
 // data := fmt.Sprintf("appid=%s&appsecret=%s&apptype=%s", appid, appsecret, "hospital")
 func (n *Client) GetToken() (string, error) {
+	token := n.TokenClient.GetCacheToken()
+	if token != "" {
+		return token, nil
+	}
 	re := &responseToken{}
-	result := Request(n.Config.Appid, "POST", n.Config.LoginUrl, n.Config.LoginData, n.Config.TimeOver, n.Config.TimeOut, false)
+	result := n.request("POST", n.Config.LoginUrl, n.Config.LoginData, false)
 	if len(result) == 0 {
 		return "", fmt.Errorf("GetToken  %s get empty data", n.Config.LoginUrl)
 	}
@@ -133,7 +156,7 @@ func (n *Client) GetToken() (string, error) {
 	}
 
 	if re.Code == 200 {
-		SetCacheToken(re.Data.XToken, n.Config.Appid)
+		n.TokenClient.SetCacheToken(re.Data.XToken)
 		return re.Data.XToken, nil
 	} else {
 		return "", fmt.Errorf(re.Message)
@@ -143,7 +166,7 @@ func (n *Client) GetToken() (string, error) {
 // RfreshToken
 func (n *Client) RfreshToken() (string, error) {
 	re := &responseToken{}
-	result := Request(n.Config.Appid, "GET", n.Config.RefreshUrl, "", n.Config.TimeOver, n.Config.TimeOut, true)
+	result := n.request("GET", n.Config.RefreshUrl, "", true)
 	if len(result) == 0 {
 		return "", fmt.Errorf("RfreshToken  %s get empty data", n.Config.RefreshUrl)
 	}
@@ -152,18 +175,18 @@ func (n *Client) RfreshToken() (string, error) {
 		return "", fmt.Errorf("unmarshal json %s error %w", string(result), err)
 	}
 	if re.Code == 200 {
-		SetCacheToken(re.Data.XToken, n.Config.Appid)
+		n.TokenClient.SetCacheToken(re.Data.XToken)
 		return re.Data.XToken, nil
 	} else {
 		return "", errors.New(re.Message)
 	}
 }
 
-func Request(appid, method, url, data string, timeover, timeout int64, auth bool) []byte {
+func (n *Client) request(method, url, data string, auth bool) []byte {
 	result := make(chan []byte, 30)
-	T := time.NewTicker(time.Duration(timeover) * time.Second)
+	T := time.NewTicker(time.Duration(n.Config.TimeOver) * time.Second)
 	go func() {
-		t := time.Duration(timeout) * time.Second
+		t := time.Duration(n.Config.TimeOut) * time.Second
 		Client := http.Client{Timeout: t}
 		req, err := http.NewRequest(method, url, strings.NewReader(data))
 		if err != nil {
@@ -171,9 +194,9 @@ func Request(appid, method, url, data string, timeover, timeout int64, auth bool
 			return
 		}
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
-		if auth && appid != "" {
-			req.Header.Set("X-Token", GetCacheToken(appid))
-			phpSessionId := GetSessionId(appid)
+		if auth && n.Config.Appid != "" {
+			req.Header.Set("X-Token", n.TokenClient.GetCacheToken())
+			phpSessionId := n.TokenClient.GetSessionId()
 			if phpSessionId != nil {
 				req.AddCookie(phpSessionId)
 			}
@@ -186,8 +209,8 @@ func Request(appid, method, url, data string, timeover, timeout int64, auth bool
 		}
 		defer resp.Body.Close()
 
-		if !auth && appid != "" {
-			SetSessionId(resp.Cookies(), appid)
+		if !auth && n.Config.Appid != "" {
+			n.TokenClient.SetSessionId(resp.Cookies())
 		}
 
 		b, _ := ioutil.ReadAll(resp.Body)
