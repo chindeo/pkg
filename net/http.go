@@ -28,8 +28,9 @@ type Config struct {
 	TimeOver    int64
 	TimeOut     int64
 	TokenDriver string
-	Host        string
-	Pwd         string
+	Host        string            // driver redis host
+	Pwd         string            // driver redis password
+	Headers     map[string]string // request headers
 }
 
 func NewNetClient(config *Config) error {
@@ -196,6 +197,11 @@ func (n *Client) request(method, url, data string, auth bool) []byte {
 			return
 		}
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
+		if len(n.Config.Headers) > 0 {
+			for key, value := range n.Config.Headers {
+				req.Header.Set(key, value)
+			}
+		}
 		if auth && n.Config.Appid != "" {
 			req.Header.Set("X-Token", n.TokenClient.GetCacheToken())
 			phpSessionId := n.TokenClient.GetSessionId()
