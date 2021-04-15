@@ -66,7 +66,7 @@ type Req struct {
 }
 
 type Token struct {
-	XToken string `json:"X-Token"`
+	XToken string `json:"AccessToken"`
 }
 
 type ServerResponse struct {
@@ -122,11 +122,11 @@ func (n *Client) GetNet(sr *ServerResponse) ([]byte, error) {
 
 	if sr.ResponseInfo.Code == 401 {
 		n.TokenClient.SetCacheToken("")
-		token, err := n.GetToken()
+		_, err := n.GetToken()
 		if err != nil {
 			return result, fmt.Errorf("%s get token err %w", sr.FullPath, err)
 		}
-		return result, fmt.Errorf("get %s 返回错误信息 get token %s", sr.FullPath, token)
+		return result, fmt.Errorf("get %s 返回错误信息  %s", sr.FullPath, sr.ResponseInfo.Message)
 	} else if sr.ResponseInfo.Code == 402 {
 		n.TokenClient.SetCacheToken("")
 		token, err := n.RfreshToken()
@@ -147,6 +147,7 @@ func (n *Client) GetToken() (string, error) {
 	if token != "" {
 		return token, nil
 	}
+
 	re := &responseToken{}
 	result := n.request("POST", n.Config.LoginUrl, n.Config.LoginData, false)
 	if len(result) == 0 {
