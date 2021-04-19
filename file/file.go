@@ -309,3 +309,15 @@ func MD5(file string) (string, error) {
 func OpenLogFile(fp string) (*os.File, error) {
 	return os.OpenFile(fp, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 }
+
+// 添加文本
+func AppendFile(filePath string, b []byte) error {
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_RDWR|os.O_CREATE, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	f.WriteString(string(b) + "\r\n\r\n")
+
+	return nil
+}
