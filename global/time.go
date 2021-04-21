@@ -107,12 +107,12 @@ func SleepRandomDuration() {
 }
 
 // OverTimeNow 超时比较
-func OverTimeNow(compareTime time.Time, sub int64) (bool, int64, error) {
+func OverTimeNow(compareTime, subTime time.Time, sub int64) (bool, int64, error) {
 	location, err := GetLocation()
 	if err != nil {
 		return false, 0, err
 	}
-	subT := time.Now().In(location).Sub(compareTime)
+	subT := compareTime.In(location).Sub(subTime)
 	abs := int64(math.Abs(math.Ceil(subT.Minutes())))
 	if abs > sub {
 		return true, abs, nil
