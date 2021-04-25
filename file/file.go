@@ -2,6 +2,7 @@ package file
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chindeo/czlib"
 	"gopkg.in/yaml.v2"
 )
 
@@ -320,4 +322,35 @@ func AppendFile(filePath string, b []byte) error {
 	f.WriteString(string(b) + "\r\n\r\n")
 
 	return nil
+}
+
+// Compress 压缩内容
+func Compress(p []byte) ([]byte, error) {
+	var b bytes.Buffer
+	w, err := czlib.NewWriterLevel(&b, 9)
+	if err != nil {
+		return nil, fmt.Errorf("czlib new writer lervel -1 %w", err)
+	}
+	defer w.Close()
+	_, err = w.Write(p)
+	if err != nil {
+		return nil, fmt.Errorf("czlib wtire bytes %w", err)
+	}
+	w.Flush()
+	return b.Bytes(), nil
+}
+
+// Decompress 解压内容
+func Decompress(p []byte) ([]byte, error) {
+	var b bytes.Buffer
+	r, err := czlib.NewReader(&b)
+	if err != nil {
+		return nil, fmt.Errorf("czlib new reader %w", err)
+	}
+	defer r.Close()
+	_, err = r.Read(p)
+	if err != nil {
+		return nil, fmt.Errorf("czlib read bytes %w", err)
+	}
+	return b.Bytes(), nil
 }

@@ -3,6 +3,7 @@ module github.com/chindeo/pkg
 go 1.16
 
 require (
+	github.com/chindeo/czlib v0.0.1
 	github.com/go-ping/ping v0.0.0-20210327002015-80a511380375
 	github.com/go-redis/redis/v8 v8.8.0
 	github.com/onsi/ginkgo v1.16.1 // indirect
