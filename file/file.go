@@ -325,9 +325,9 @@ func AppendFile(filePath string, b []byte) error {
 }
 
 // Compress 压缩内容
-func Compress(p []byte) ([]byte, error) {
+func Compress(p []byte, level int) ([]byte, error) {
 	var b bytes.Buffer
-	w, err := czlib.NewWriterLevel(&b, 9)
+	w, err := czlib.NewWriterLevel(&b, level)
 	if err != nil {
 		return nil, fmt.Errorf("czlib new writer lervel -1 %w", err)
 	}
