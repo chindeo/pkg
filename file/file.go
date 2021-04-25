@@ -341,16 +341,15 @@ func Compress(p []byte, level int) ([]byte, error) {
 }
 
 // Decompress 解压内容
-func Decompress(p []byte) ([]byte, error) {
-	var b bytes.Buffer
-	r, err := czlib.NewReader(&b)
+func Decompress(b []byte) ([]byte, error) {
+	r, err := czlib.NewReader(bytes.NewReader(b))
 	if err != nil {
 		return nil, fmt.Errorf("czlib new reader %w", err)
 	}
 	defer r.Close()
-	_, err = r.Read(p)
+	enflated, err := ioutil.ReadAll(r)
 	if err != nil {
-		return nil, fmt.Errorf("czlib read bytes %w", err)
+		return nil, fmt.Errorf("ioutil readall %w", err)
 	}
-	return b.Bytes(), nil
+	return enflated, nil
 }
