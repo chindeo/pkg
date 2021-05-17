@@ -73,7 +73,7 @@ func WrapTimeout(cmd *exec.Cmd, timeout time.Duration) (error, bool) {
 		// IMPORTANT: cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} is necessary before cmd.Start()
 		// err = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		err = cmd.Process.Kill()
-		return err, true
+		return fmt.Errorf("cmd kill process %w", err), true
 	case err = <-done:
 		return err, false
 	}
