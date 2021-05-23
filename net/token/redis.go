@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/chindeo/pkg/net/redis_client"
 	"github.com/go-redis/redis/v8"
 	"github.com/patrickmn/go-cache"
 )
@@ -46,7 +47,7 @@ func (lc *RedisClient) GetCache() {
 	if lc.ca != nil {
 		return
 	}
-	lc.ca = redis.NewClient(&redis.Options{
+	lc.ca = redis_client.NewClient(&redis.Options{
 		Addr:     lc.Host,
 		Password: lc.Pwd, // no password set
 		DB:       0,      // use default DB
