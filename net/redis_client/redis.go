@@ -8,7 +8,7 @@ import (
 
 var (
 	redisClient *redis.Client
-	once        *sync.Once
+	once        sync.Once
 )
 
 func NewClient(options *redis.Options) *redis.Client {
