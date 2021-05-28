@@ -50,6 +50,10 @@ func NewNetClient(config *Config) error {
 		NetClient.TokenClient = &token.LocalClient{AppID: config.Appid}
 	}
 	NetClient.TokenClient.GetCache()
+	err := NetClient.TokenClient.Ping()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

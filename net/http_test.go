@@ -177,10 +177,6 @@ func Test_NewNetClient(t *testing.T) {
 			if err != nil {
 				t.Errorf("redis ping is fault,get msg %s", err.Error())
 			}
-			err = NetClient.TokenClient.Ping()
-			if err != nil {
-				t.Errorf("redis ping is fault,get msg %s", err.Error())
-			}
 		})
 	}
 
