@@ -58,3 +58,7 @@ func (lc *LocalClient) GetCacheToken() string {
 	}
 	return lc.token
 }
+
+func (lc *LocalClient) Ping() error {
+	return nil
+}

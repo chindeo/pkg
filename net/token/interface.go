@@ -10,4 +10,5 @@ type TokenClient interface {
 	GetCache()
 	SetCacheToken(token string)
 	GetCacheToken() string
+	Ping() error
 }

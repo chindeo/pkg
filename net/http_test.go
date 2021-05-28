@@ -141,3 +141,47 @@ func Test_POSTNet(t *testing.T) {
 		})
 	}
 }
+
+func Test_NewNetClient(t *testing.T) {
+	args := []*Config{
+		{
+			Appid:       "Appid",
+			AppSecret:   "AppSecret",
+			LoginData:   "LoginData",
+			LoginUrl:    "LoginUrl",
+			RefreshUrl:  "RefreshUrl",
+			TimeOver:    5,
+			TimeOut:     5,
+			TokenDriver: "redis",
+			Host:        "127.0.0.1:6379", // driver redis host
+			Pwd:         "snowlyg",        // driver redis password
+			Headers:     nil,              // request headers
+		},
+		{
+			Appid:       "Appid",
+			AppSecret:   "AppSecret",
+			LoginData:   "LoginData",
+			LoginUrl:    "LoginUrl",
+			RefreshUrl:  "RefreshUrl",
+			TimeOver:    5,
+			TimeOut:     5,
+			TokenDriver: "lcoal",
+			Host:        "",  // driver redis host
+			Pwd:         "",  // driver redis password
+			Headers:     nil, // request headers
+		},
+	}
+	for _, arg := range args {
+		t.Run("new redis client", func(t *testing.T) {
+			err := NewNetClient(arg)
+			if err != nil {
+				t.Errorf("redis ping is fault,get msg %s", err.Error())
+			}
+			err = NetClient.TokenClient.Ping()
+			if err != nil {
+				t.Errorf("redis ping is fault,get msg %s", err.Error())
+			}
+		})
+	}
+
+}

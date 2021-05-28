@@ -70,3 +70,7 @@ func (lc *RedisClient) GetCacheToken() string {
 	lc.token = foo
 	return lc.token
 }
+
+func (lc *RedisClient) Ping() error {
+	return lc.ca.Ping(ctx).Err()
+}
