@@ -36,6 +36,11 @@ type Config struct {
 }
 
 func NewNetClient(config *Config) error {
+
+	if NetClient != nil {
+		return nil
+	}
+
 	NetClient = &Client{Config: config}
 	switch config.TokenDriver {
 	case "local":
@@ -45,6 +50,7 @@ func NewNetClient(config *Config) error {
 	default:
 		NetClient.TokenClient = &token.LocalClient{AppID: config.Appid}
 	}
+
 	NetClient.TokenClient.GetCache()
 
 	if config.TokenDriver == "redis" && (config.Host == "" || config.Pwd == "") {
