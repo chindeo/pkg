@@ -12,7 +12,9 @@ import (
 	"github.com/chindeo/pkg/net/token"
 )
 
-var NetClient *Client
+var (
+	NetClient *Client
+)
 
 type Client struct {
 	Config      *Config
@@ -34,26 +36,25 @@ type Config struct {
 }
 
 func NewNetClient(config *Config) error {
-	if NetClient != nil {
-		return nil
-	}
 	NetClient = &Client{Config: config}
 	switch config.TokenDriver {
 	case "local":
 		NetClient.TokenClient = &token.LocalClient{AppID: config.Appid}
 	case "redis":
-		if config.Host == "" || config.Pwd == "" {
-			return errors.New("redis driver need set redis host and password")
-		}
 		NetClient.TokenClient = &token.RedisClient{AppID: config.Appid, Host: config.Host, Pwd: config.Pwd}
 	default:
 		NetClient.TokenClient = &token.LocalClient{AppID: config.Appid}
 	}
 	NetClient.TokenClient.GetCache()
+
+	if config.TokenDriver == "redis" && (config.Host == "" || config.Pwd == "") {
+		return errors.New("redis driver need set redis host and password")
+	}
 	err := NetClient.TokenClient.Ping()
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 

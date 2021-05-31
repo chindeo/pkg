@@ -9,6 +9,8 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
+var oncela sync.Once
+
 type LocalClient struct {
 	AppID   string
 	rw      sync.RWMutex
@@ -37,10 +39,10 @@ func (lc *LocalClient) GetSessionId() *http.Cookie {
 }
 
 func (lc *LocalClient) GetCache() {
-	if lc.ca != nil {
-		return
-	}
-	lc.ca = cache.New(24*time.Hour, 7*24*time.Hour)
+	oncela.Do(func() {
+		lc.ca = cache.New(24*time.Hour, 7*24*time.Hour)
+	})
+
 }
 
 func (lc *LocalClient) SetCacheToken(token string) {
