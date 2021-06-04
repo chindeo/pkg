@@ -1,10 +1,11 @@
 package net
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -242,8 +243,9 @@ func (n *Client) request(method, url, data string, auth bool) []byte {
 			n.TokenClient.SetSessionId(resp.Cookies())
 		}
 
-		b, _ := ioutil.ReadAll(resp.Body)
-		result <- b
+		buf := bytes.NewBuffer(nil)
+		io.Copy(buf, resp.Body)
+		result <- buf.Bytes()
 
 	}()
 
