@@ -120,6 +120,15 @@ func (n *Client) POSTNet(sr *ServerResponse, data string) ([]byte, error) {
 	return result, nil
 }
 
+//GetFile  下载文件
+func (n *Client) GetFile(sr *ServerResponse) ([]byte, error) {
+	result := n.request("GET", sr.FullPath, "", sr.Auth)
+	if len(result) == 0 {
+		return result, fmt.Errorf("get %s 没有返回数据", sr.FullPath)
+	}
+	return result, nil
+}
+
 //GetNet  获取数据
 func (n *Client) GetNet(sr *ServerResponse) ([]byte, error) {
 	result := n.request("GET", sr.FullPath, "", sr.Auth)
