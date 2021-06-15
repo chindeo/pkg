@@ -104,12 +104,14 @@ func (n *Client) POSTNet(sr *ServerResponse, data string) ([]byte, error) {
 	}
 
 	if sr.ResponseInfo.Code == 401 {
+		n.TokenClient.SetCacheToken("")
 		token, err := n.GetToken()
 		if err != nil {
 			return result, fmt.Errorf("post %s get token err %w", sr.FullPath, err)
 		}
 		return result, fmt.Errorf("post %s get token %s", sr.FullPath, token)
 	} else if sr.ResponseInfo.Code == 402 {
+		n.TokenClient.SetCacheToken("")
 		token, err := n.RfreshToken()
 		if err != nil {
 			return result, fmt.Errorf("post %s refresh token err %w", sr.FullPath, err)
