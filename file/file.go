@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -24,6 +26,35 @@ import (
 func SelfPath() string {
 	path, _ := filepath.Abs(os.Args[0])
 	return path
+}
+
+func GetCurrentAbPath() string {
+	dir := GetCurrentAbPathByExecutable()
+	tmpDir, _ := filepath.EvalSymlinks(os.TempDir())
+	if strings.Contains(dir, tmpDir) {
+		return GetCurrentAbPathByCaller()
+	}
+	return dir
+}
+
+// 当前执行文件目录
+func GetCurrentAbPathByExecutable() string {
+	exePath, err := os.Executable()
+	if err != nil {
+		log.Fatal(err)
+	}
+	res, _ := filepath.EvalSymlinks(filepath.Dir(exePath))
+	return res
+}
+
+// 当前方法执行目录
+func GetCurrentAbPathByCaller() string {
+	var abPath string
+	_, filename, _, ok := runtime.Caller(0)
+	if ok {
+		abPath = path.Dir(filename)
+	}
+	return abPath
 }
 
 // get absolute filepath, based on built executable file
