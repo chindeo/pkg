@@ -10,7 +10,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -297,29 +296,6 @@ func WriteBytes(filePath string, b []byte) (int, error) {
 
 func WriteString(filePath string, s string) (int, error) {
 	return WriteBytes(filePath, []byte(s))
-}
-
-func Download(toFile, url string) error {
-	out, err := os.Create(toFile)
-	if err != nil {
-		return err
-	}
-
-	defer out.Close()
-
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-
-	if resp.Body == nil {
-		return fmt.Errorf("%s response body is nil", url)
-	}
-
-	defer resp.Body.Close()
-
-	_, err = io.Copy(out, resp.Body)
-	return err
 }
 
 func MD5(file string) (string, error) {

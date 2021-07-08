@@ -154,7 +154,7 @@ func Test_NewNetClient(t *testing.T) {
 			TimeOut:     5,
 			TokenDriver: "redis",
 			Host:        "127.0.0.1:6379", // driver redis host
-			Pwd:         "snowlyg",        // driver redis password
+			Pwd:         "Chindeo",        // driver redis password
 			Headers:     nil,              // request headers
 		},
 		{

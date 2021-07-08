@@ -1,10 +1,11 @@
 package net
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -12,7 +13,9 @@ import (
 	"github.com/chindeo/pkg/net/token"
 )
 
-var NetClient *Client
+var (
+	NetClient *Client
+)
 
 type Client struct {
 	Config      *Config
@@ -34,26 +37,31 @@ type Config struct {
 }
 
 func NewNetClient(config *Config) error {
+
 	if NetClient != nil {
 		return nil
 	}
+
 	NetClient = &Client{Config: config}
 	switch config.TokenDriver {
 	case "local":
 		NetClient.TokenClient = &token.LocalClient{AppID: config.Appid}
 	case "redis":
-		if config.Host == "" || config.Pwd == "" {
-			return errors.New("redis driver need set redis host and password")
-		}
 		NetClient.TokenClient = &token.RedisClient{AppID: config.Appid, Host: config.Host, Pwd: config.Pwd}
 	default:
 		NetClient.TokenClient = &token.LocalClient{AppID: config.Appid}
 	}
+
 	NetClient.TokenClient.GetCache()
+
+	if config.TokenDriver == "redis" && (config.Host == "" || config.Pwd == "") {
+		return errors.New("redis driver need set redis host and password")
+	}
 	err := NetClient.TokenClient.Ping()
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -96,12 +104,14 @@ func (n *Client) POSTNet(sr *ServerResponse, data string) ([]byte, error) {
 	}
 
 	if sr.ResponseInfo.Code == 401 {
+		n.TokenClient.SetCacheToken("")
 		token, err := n.GetToken()
 		if err != nil {
 			return result, fmt.Errorf("post %s get token err %w", sr.FullPath, err)
 		}
 		return result, fmt.Errorf("post %s get token %s", sr.FullPath, token)
 	} else if sr.ResponseInfo.Code == 402 {
+		n.TokenClient.SetCacheToken("")
 		token, err := n.RfreshToken()
 		if err != nil {
 			return result, fmt.Errorf("post %s refresh token err %w", sr.FullPath, err)
@@ -109,6 +119,15 @@ func (n *Client) POSTNet(sr *ServerResponse, data string) ([]byte, error) {
 		return result, fmt.Errorf("post %s refresh token %s", sr.FullPath, token)
 	} else if sr.ResponseInfo.Code != 200 {
 		return result, fmt.Errorf("post %s 返回错误信息 %s 【%d】", sr.FullPath, sr.ResponseInfo.Message, sr.ResponseInfo.Code)
+	}
+	return result, nil
+}
+
+//GetFile  下载文件
+func (n *Client) GetFile(sr *ServerResponse) ([]byte, error) {
+	result := n.request("GET", sr.FullPath, "", sr.Auth)
+	if len(result) == 0 {
+		return result, fmt.Errorf("get %s 没有返回数据", sr.FullPath)
 	}
 	return result, nil
 }
@@ -226,8 +245,9 @@ func (n *Client) request(method, url, data string, auth bool) []byte {
 			n.TokenClient.SetSessionId(resp.Cookies())
 		}
 
-		b, _ := ioutil.ReadAll(resp.Body)
-		result <- b
+		buf := bytes.NewBuffer(nil)
+		io.Copy(buf, resp.Body)
+		result <- buf.Bytes()
 
 	}()
 
