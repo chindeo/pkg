@@ -271,6 +271,7 @@ func ReadYaml(cpath string, cptr interface{}) error {
 }
 
 func ReadJson(cpath string, cptr interface{}) error {
+	os.MkdirAll(path.Dir(cpath), os.ModePerm)
 	bs, err := ReadBytes(cpath)
 	if err != nil {
 		return fmt.Errorf("cannot read %s: %s", cpath, err.Error())
