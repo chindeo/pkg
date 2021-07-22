@@ -316,6 +316,15 @@ func MD5(file string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+func Md5Byte(p []byte) (string, error) {
+	h := md5.New()
+	_, err := h.Write(p)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
 func OpenLogFile(fp string) (*os.File, error) {
 	os.MkdirAll(path.Dir(fp), os.ModePerm)
 	return os.OpenFile(fp, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
