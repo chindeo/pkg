@@ -54,6 +54,14 @@ func GetCurrentAbPathByCaller() string {
 	return abPath
 }
 
+// 当前方法执行函数名
+func GetCurrentFuncNameByCaller() string {
+	pc := make([]uintptr, 1)
+	runtime.Callers(2, pc)
+	f := runtime.FuncForPC(pc[0])
+	return f.Name()
+}
+
 // get absolute filepath, based on built executable file
 func RealPath(fp string) (string, error) {
 	if path.IsAbs(fp) {
