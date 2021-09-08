@@ -54,8 +54,8 @@ func NewNetClient(config *Config) error {
 
 	NetClient.TokenClient.GetCache()
 
-	if config.TokenDriver == "redis" && (config.Host == "" || config.Pwd == "") {
-		return errors.New("redis driver need set redis host and password")
+	if config.TokenDriver == "redis" && (config.Host == "") {
+		return errors.New("redis driver need set redis host")
 	}
 	err := NetClient.TokenClient.Ping()
 	if err != nil {
