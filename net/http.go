@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
@@ -93,8 +94,57 @@ type ResponseInfo struct {
 }
 
 //POSTNet  提交数据
+func (n *Client) Upload(sr *ServerResponse, name, filename string, params map[string]string, src io.Reader) ([]byte, error) {
+	body := &bytes.Buffer{}                            // 初始化body参数
+	writer := multipart.NewWriter(body)                // 实例化multipart
+	part, err := writer.CreateFormFile(name, filename) // 创建multipart 文件字段
+	if err != nil {
+		return nil, err
+	}
+	_, err = io.Copy(part, src) // 写入文件数据到multipart
+	if err != nil {
+		return nil, err
+	}
+	for key, val := range params {
+		_ = writer.WriteField(key, val) // 写入body中额外参数，比如七牛上传时需要提供token
+	}
+	err = writer.Close()
+	if err != nil {
+		return nil, err
+	}
+	formcontenttype := writer.FormDataContentType()
+	result := n.request(http.MethodPost, sr.FullPath, formcontenttype, body, sr.Auth)
+	if len(result) == 0 {
+		return result, fmt.Errorf("post %s 没有返回数据", sr.FullPath)
+	}
+	err = json.Unmarshal(result, sr.ResponseInfo)
+	if err != nil {
+		return result, fmt.Errorf("dopost: %s json.Unmarshal error：%w ,with result: %v", sr.FullPath, err, string(result))
+	}
+
+	if sr.ResponseInfo.Code == 401 {
+		n.TokenClient.SetCacheToken("")
+		token, err := n.GetToken()
+		if err != nil {
+			return result, fmt.Errorf("post %s get token err %w", sr.FullPath, err)
+		}
+		return result, fmt.Errorf("post %s get token %s", sr.FullPath, token)
+	} else if sr.ResponseInfo.Code == 402 {
+		n.TokenClient.SetCacheToken("")
+		token, err := n.RfreshToken()
+		if err != nil {
+			return result, fmt.Errorf("post %s refresh token err %w", sr.FullPath, err)
+		}
+		return result, fmt.Errorf("post %s refresh token %s", sr.FullPath, token)
+	} else if sr.ResponseInfo.Code != 200 {
+		return result, fmt.Errorf("post [%s] 返回错误信息 [%s] 【%d】", sr.FullPath, sr.ResponseInfo.Message, sr.ResponseInfo.Code)
+	}
+	return result, nil
+}
+
+//POSTNet  提交数据
 func (n *Client) POSTNet(sr *ServerResponse, data string) ([]byte, error) {
-	result := n.request("POST", sr.FullPath, data, sr.Auth)
+	result := n.request(http.MethodPost, sr.FullPath, "application/x-www-form-urlencoded; param=value", strings.NewReader(data), sr.Auth)
 	if len(result) == 0 {
 		return result, fmt.Errorf("post %s 没有返回数据", sr.FullPath)
 	}
@@ -125,7 +175,7 @@ func (n *Client) POSTNet(sr *ServerResponse, data string) ([]byte, error) {
 
 //GetFile  下载文件
 func (n *Client) GetFile(sr *ServerResponse) ([]byte, error) {
-	result := n.request("GET", sr.FullPath, "", sr.Auth)
+	result := n.request("GET", sr.FullPath, "application/x-www-form-urlencoded; param=value", nil, sr.Auth)
 	if len(result) == 0 {
 		return result, fmt.Errorf("get %s 没有返回数据", sr.FullPath)
 	}
@@ -134,7 +184,7 @@ func (n *Client) GetFile(sr *ServerResponse) ([]byte, error) {
 
 //GetNet  获取数据
 func (n *Client) GetNet(sr *ServerResponse) ([]byte, error) {
-	result := n.request("GET", sr.FullPath, "", sr.Auth)
+	result := n.request("GET", sr.FullPath, "application/x-www-form-urlencoded; param=value", nil, sr.Auth)
 	if len(result) == 0 {
 		return result, fmt.Errorf("get %s 没有返回数据", sr.FullPath)
 	}
@@ -172,7 +222,7 @@ func (n *Client) GetToken() (string, error) {
 	}
 
 	re := &responseToken{}
-	result := n.request("POST", n.Config.LoginUrl, n.Config.LoginData, false)
+	result := n.request(http.MethodPost, n.Config.LoginUrl, "application/x-www-form-urlencoded; param=value", strings.NewReader(n.Config.LoginData), false)
 	if len(result) == 0 {
 		return "", fmt.Errorf("GetToken  %s get empty data", n.Config.LoginUrl)
 	}
@@ -193,7 +243,7 @@ func (n *Client) GetToken() (string, error) {
 // RfreshToken
 func (n *Client) RfreshToken() (string, error) {
 	re := &responseToken{}
-	result := n.request("GET", n.Config.RefreshUrl, "", true)
+	result := n.request("GET", n.Config.RefreshUrl, "application/x-www-form-urlencoded; param=value", nil, true)
 	if len(result) == 0 {
 		return "", fmt.Errorf("RfreshToken  %s get empty data", n.Config.RefreshUrl)
 	}
@@ -209,18 +259,18 @@ func (n *Client) RfreshToken() (string, error) {
 	}
 }
 
-func (n *Client) request(method, url, data string, auth bool) []byte {
+func (n *Client) request(method, url, contentType string, body io.Reader, auth bool) []byte {
 	result := make(chan []byte, 30)
 	T := time.NewTicker(time.Duration(n.Config.TimeOver) * time.Second)
 	go func() {
 		t := time.Duration(n.Config.TimeOut) * time.Second
 		Client := http.Client{Timeout: t}
-		req, err := http.NewRequest(method, url, strings.NewReader(data))
+		req, err := http.NewRequest(method, url, body)
 		if err != nil {
 			result <- nil
 			return
 		}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
+		req.Header.Set("Content-Type", contentType)
 		if len(n.Config.Headers) > 0 {
 			for key, value := range n.Config.Headers {
 				req.Header.Set(key, value)
