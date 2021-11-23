@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -19,29 +18,82 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+func ImportGetCurrentAbPath() {
+	fmt.Println(`
+	
+func GetCurrentAbPath() (string, error) {
+	dir, err := GetCurrentAbPathByExecutable()
+	if err != nil {
+		return "", err
+	}
+	tmpDir, err := filepath.EvalSymlinks(os.TempDir())
+	if err != nil {
+		return "", err
+	}
+	if strings.Contains(dir, tmpDir) {
+		return GetCurrentAbPathByCaller(), nil
+	}
+	return dir, nil
+}
+
+// 当前执行文件目录
+func GetCurrentAbPathByExecutable() (string, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	res, err := filepath.EvalSymlinks(filepath.Dir(exePath))
+	if err != nil {
+		return "", err
+	}
+	return res, nil
+}
+
+// 当前方法执行目录
+func GetCurrentAbPathByCaller() string {
+	var abPath string
+	_, filename, _, ok := runtime.Caller(0)
+	if ok {
+		abPath = path.Dir(filename)
+	}
+	return abPath
+}
+	`)
+
+}
+
 // SelfPath gets compiled executable file absolute path
 func SelfPath() string {
 	path, _ := filepath.Abs(os.Args[0])
 	return path
 }
 
-func GetCurrentAbPath() string {
-	dir := GetCurrentAbPathByExecutable()
-	tmpDir, _ := filepath.EvalSymlinks(os.TempDir())
-	if strings.Contains(dir, tmpDir) {
-		return GetCurrentAbPathByCaller()
+func GetCurrentAbPath() (string, error) {
+	dir, err := GetCurrentAbPathByExecutable()
+	if err != nil {
+		return "", err
 	}
-	return dir
+	tmpDir, err := filepath.EvalSymlinks(os.TempDir())
+	if err != nil {
+		return "", err
+	}
+	if strings.Contains(dir, tmpDir) {
+		return GetCurrentAbPathByCaller(), nil
+	}
+	return dir, nil
 }
 
 // 当前执行文件目录
-func GetCurrentAbPathByExecutable() string {
+func GetCurrentAbPathByExecutable() (string, error) {
 	exePath, err := os.Executable()
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
-	res, _ := filepath.EvalSymlinks(filepath.Dir(exePath))
-	return res
+	res, err := filepath.EvalSymlinks(filepath.Dir(exePath))
+	if err != nil {
+		return "", err
+	}
+	return res, nil
 }
 
 // 当前方法执行目录
