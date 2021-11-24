@@ -89,8 +89,9 @@ type ServerResponse struct {
 }
 
 type ResponseInfo struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data"`
 }
 
 //POSTNet  提交数据
