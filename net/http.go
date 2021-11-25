@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ var (
 )
 
 type Client struct {
+	Transport   http.RoundTripper
 	Config      *Config
 	TokenClient token.TokenClient
 }
@@ -26,6 +28,7 @@ type Client struct {
 type Config struct {
 	Appid       string
 	AppSecret   string
+	Proxy       string
 	LoginData   string
 	LoginUrl    string
 	RefreshUrl  string
@@ -44,6 +47,15 @@ func NewNetClient(config *Config) error {
 	}
 
 	NetClient = &Client{Config: config}
+
+	// 添加代理
+	if config.Proxy != "" {
+		proxy := func(_ *http.Request) (*url.URL, error) {
+			return url.Parse(config.Proxy)
+		}
+		NetClient.Transport = &http.Transport{Proxy: proxy}
+	}
+
 	switch config.TokenDriver {
 	case "local":
 		NetClient.TokenClient = &token.LocalClient{AppID: config.Appid}
@@ -134,9 +146,9 @@ func (n *Client) Upload(sr *ServerResponse, name, filename string, params map[st
 		n.TokenClient.SetCacheToken("")
 		token, err := n.RfreshToken()
 		if err != nil {
-			return result, fmt.Errorf("post %s refresh token err %w", sr.FullPath, err)
+			return result, fmt.Errorf("post %s %w", sr.FullPath, err)
 		}
-		return result, fmt.Errorf("post %s refresh token %s", sr.FullPath, token)
+		return result, fmt.Errorf("post %s token %s", sr.FullPath, token)
 	} else if sr.ResponseInfo.Code != 200 {
 		return result, fmt.Errorf("post [%s] 返回错误信息 [%s] 【%d】", sr.FullPath, sr.ResponseInfo.Message, sr.ResponseInfo.Code)
 	}
@@ -147,20 +159,20 @@ func (n *Client) Upload(sr *ServerResponse, name, filename string, params map[st
 func (n *Client) POSTNet(sr *ServerResponse, data string) ([]byte, error) {
 	result := n.request(http.MethodPost, sr.FullPath, "application/x-www-form-urlencoded; param=value", strings.NewReader(data), sr.Auth)
 	if len(result) == 0 {
-		return result, fmt.Errorf("post %s 没有返回数据", sr.FullPath)
+		return result, fmt.Errorf("[%s] %s?%s 没有返回数据", http.MethodPost, sr.FullPath, data)
 	}
 	err := json.Unmarshal(result, sr.ResponseInfo)
 	if err != nil {
-		return result, fmt.Errorf("dopost: %s json.Unmarshal error：%w ,with result: %v", sr.FullPath, err, string(result))
+		return result, fmt.Errorf("[%s] %s json.Unmarshal error：%w ,with result: %v", http.MethodPost, sr.FullPath, err, string(result))
 	}
 
 	if sr.ResponseInfo.Code == 401 {
 		n.TokenClient.SetCacheToken("")
 		token, err := n.GetToken()
 		if err != nil {
-			return result, fmt.Errorf("post %s get token err %w", sr.FullPath, err)
+			return result, fmt.Errorf("[%s] %s %w", sr.FullPath, sr.FullPath, err)
 		}
-		return result, fmt.Errorf("post %s get token %s", sr.FullPath, token)
+		return result, fmt.Errorf("[%s]  %s  %s", sr.FullPath, sr.FullPath, token)
 	} else if sr.ResponseInfo.Code == 402 {
 		n.TokenClient.SetCacheToken("")
 		token, err := n.RfreshToken()
@@ -176,40 +188,40 @@ func (n *Client) POSTNet(sr *ServerResponse, data string) ([]byte, error) {
 
 //GetFile  下载文件
 func (n *Client) GetFile(sr *ServerResponse) ([]byte, error) {
-	result := n.request("GET", sr.FullPath, "application/x-www-form-urlencoded; param=value", nil, sr.Auth)
+	result := n.request(http.MethodGet, sr.FullPath, "application/x-www-form-urlencoded; param=value", nil, sr.Auth)
 	if len(result) == 0 {
-		return result, fmt.Errorf("get %s 没有返回数据", sr.FullPath)
+		return result, fmt.Errorf("[%s] %s 没有返回数据", http.MethodGet, sr.FullPath)
 	}
 	return result, nil
 }
 
 //GetNet  获取数据
 func (n *Client) GetNet(sr *ServerResponse) ([]byte, error) {
-	result := n.request("GET", sr.FullPath, "application/x-www-form-urlencoded; param=value", nil, sr.Auth)
+	result := n.request(http.MethodGet, sr.FullPath, "application/x-www-form-urlencoded; param=value", nil, sr.Auth)
 	if len(result) == 0 {
-		return result, fmt.Errorf("get %s 没有返回数据", sr.FullPath)
+		return result, fmt.Errorf("[%s] %s 没有返回数据", http.MethodGet, sr.FullPath)
 	}
 	err := json.Unmarshal(result, sr.ResponseInfo)
 	if err != nil {
-		return result, fmt.Errorf("get %s 获取服务解析返回内容报错 %w", sr.FullPath, err)
+		return result, fmt.Errorf("[%s] %s 获取服务解析返回内容报错 %w", http.MethodGet, sr.FullPath, err)
 	}
 
 	if sr.ResponseInfo.Code == 401 {
 		n.TokenClient.SetCacheToken("")
 		_, err := n.GetToken()
 		if err != nil {
-			return result, fmt.Errorf("%s get token err %w", sr.FullPath, err)
+			return result, fmt.Errorf("[%s] %s %w", http.MethodGet, sr.FullPath, err)
 		}
-		return result, fmt.Errorf("get %s 返回错误信息  %s", sr.FullPath, sr.ResponseInfo.Message)
+		return result, fmt.Errorf("[%s] %s %s", http.MethodGet, sr.FullPath, sr.ResponseInfo.Message)
 	} else if sr.ResponseInfo.Code == 402 {
 		n.TokenClient.SetCacheToken("")
 		token, err := n.RfreshToken()
 		if err != nil {
-			return result, fmt.Errorf("get %s refresh token err %w", sr.FullPath, err)
+			return result, fmt.Errorf("[%s] %s %w", http.MethodGet, sr.FullPath, err)
 		}
-		return result, fmt.Errorf("get %s 返回错误信息 refresh token %s ", sr.FullPath, token)
+		return result, fmt.Errorf("[%s] %s  %s ", http.MethodGet, sr.FullPath, token)
 	} else if sr.ResponseInfo.Code != 200 {
-		return result, fmt.Errorf("get %s 返回错误信息 %s 【%d】", sr.FullPath, sr.ResponseInfo.Message, sr.ResponseInfo.Code)
+		return result, fmt.Errorf("[%s] %s  %s 【%d】", http.MethodGet, sr.FullPath, sr.ResponseInfo.Message, sr.ResponseInfo.Code)
 	}
 	return result, nil
 }
@@ -244,7 +256,7 @@ func (n *Client) GetToken() (string, error) {
 // RfreshToken
 func (n *Client) RfreshToken() (string, error) {
 	re := &responseToken{}
-	result := n.request("GET", n.Config.RefreshUrl, "application/x-www-form-urlencoded; param=value", nil, true)
+	result := n.request(http.MethodGet, n.Config.RefreshUrl, "application/x-www-form-urlencoded; param=value", nil, true)
 	if len(result) == 0 {
 		return "", fmt.Errorf("RfreshToken  %s get empty data", n.Config.RefreshUrl)
 	}
@@ -265,7 +277,7 @@ func (n *Client) request(method, url, contentType string, body io.Reader, auth b
 	T := time.NewTicker(time.Duration(n.Config.TimeOver) * time.Second)
 	go func() {
 		t := time.Duration(n.Config.TimeOut) * time.Second
-		Client := http.Client{Timeout: t}
+		Client := http.Client{Timeout: t, Transport: n.Transport}
 		req, err := http.NewRequest(method, url, body)
 		if err != nil {
 			result <- nil
@@ -287,6 +299,7 @@ func (n *Client) request(method, url, contentType string, body io.Reader, auth b
 		var resp *http.Response
 		resp, err = Client.Do(req)
 		if err != nil {
+			fmt.Println(err)
 			result <- nil
 			return
 		}
